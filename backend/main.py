@@ -22,12 +22,7 @@ app = FastAPI(
 # ── CORS — allow Next.js frontend ─────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://multi-agent-bi-platform-dheeraj-kumars-projects-554ee990.vercel.app",
-        "https://*.vercel.app",
-        "https://multi-agent-bi-platform.vercel.app",
-    ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
