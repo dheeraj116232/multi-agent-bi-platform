@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+langgraph
+langchain-groq
+langchain
+pandas
+numpy
+plotly
+kaleido
+prophet
+scikit-learn
+xgboost
+reportlab
+python-multipart
+psycopg2-binary
+python-dotenv
