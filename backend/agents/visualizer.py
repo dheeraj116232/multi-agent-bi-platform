@@ -1,41 +1,43 @@
 ﻿"""
 Agent 3 — Production Visualization Agent
-------------------------------------------
-Charts generated (adaptive — only created when underlying data exists):
-  1.  Revenue by Product — horizontal bar (top 10)
-  2.  Monthly Revenue Trend — line with markers + MoM growth overlay
-  3.  Revenue by Region — choropleth-style bar (sorted)
-  4.  Quarterly Revenue — grouped bar
-  5.  Revenue Share — donut chart (top 8 products)
-  6.  Customer Revenue Concentration — bar (top 10 customers)
-  7.  Correlation Heatmap — numeric columns
-  8.  KPI Summary Card — table / annotation figure
-  9.  Sales vs Quantity Scatter — if both columns exist
- 10.  Anomaly Highlight — monthly line with anomaly markers
-
-All charts:
-  * Consistent corporate colour palette
-  * Transparent backgrounds (web-ready)
-  * 1200x600 px PNG output (retina-friendly)
-  * Saved to static/charts/
+Render-compatible: uses ONLY matplotlib (no kaleido, no Chrome needed)
+All 10 charts saved as PNG — works on any server
 """
 
 import os, time
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.gridspec import GridSpec
 from core.state import AgentState
 
 CHARTS_DIR = "static/charts"
 os.makedirs(CHARTS_DIR, exist_ok=True)
 
-# Corporate palette
-PALETTE = ["#2563EB","#7C3AED","#059669","#D97706","#DC2626",
-           "#0891B2","#65A30D","#DB2777","#EA580C","#4F46E5"]
-BG   = "rgba(0,0,0,0)"
-GRID = "rgba(100,100,100,0.1)"
+COLORS = ["#2563EB","#7C3AED","#059669","#D97706","#DC2626",
+          "#0891B2","#65A30D","#DB2777","#EA580C","#4F46E5"]
+
+plt.rcParams.update({
+    "figure.facecolor": "white",
+    "axes.facecolor":   "#f8fafc",
+    "axes.edgecolor":   "#e2e8f0",
+    "axes.grid":        True,
+    "grid.color":       "#f1f5f9",
+    "grid.linewidth":   0.8,
+    "font.family":      "DejaVu Sans",
+    "font.size":        11,
+    "axes.titlesize":   14,
+    "axes.titleweight": "bold",
+    "axes.titlecolor":  "#1e293b",
+    "axes.labelcolor":  "#64748b",
+    "xtick.color":      "#64748b",
+    "ytick.color":      "#64748b",
+    "axes.spines.top":  False,
+    "axes.spines.right":False,
+})
 
 
 def visualization_agent(state: AgentState) -> AgentState:
@@ -61,269 +63,275 @@ def visualization_agent(state: AgentState) -> AgentState:
         qty_col      = _first(col_map, "quantity")
         product_col  = _first(col_map, "product")
         region_col   = _first(col_map, "region")
-        date_col     = _first(col_map, "date")
         customer_col = _first(col_map, "customer")
 
-        def save(fig, name: str, title: str, description: str):
-            """Save figure as PNG using kaleido."""
-            fig.update_layout(
-                paper_bgcolor="white",
-                plot_bgcolor="white",
-                font=dict(family="Inter, Arial, sans-serif", size=13),
-                margin=dict(l=60, r=40, t=60, b=60),
-            )
+        def save(name, title, description):
             path = f"{CHARTS_DIR}/{base}_{name}.png"
-            try:
-                fig.write_image(path, width=1200, height=600, scale=1.5)
-                chart_paths.append(path)
-                chart_meta.append({
-                    "path": path,
-                    "title": title,
-                    "description": description,
-                    "format": "png"
-                })
-                print(f"  [OK] {title}")
-            except Exception as img_err:
-                # Fallback to HTML if kaleido fails
-                print(f"  [WARN] PNG failed for {title}: {img_err} — saving HTML")
-                html_path = f"{CHARTS_DIR}/{base}_{name}.html"
-                fig.write_html(html_path)
-                chart_paths.append(html_path)
-                chart_meta.append({
-                    "path": html_path,
-                    "title": title,
-                    "description": description,
-                    "format": "html"
-                })
+            plt.savefig(path, dpi=150, bbox_inches="tight",
+                        facecolor="white", edgecolor="none")
+            plt.close("all")
+            chart_paths.append(path)
+            chart_meta.append({"path": path, "title": title,
+                               "description": description, "format": "png"})
+            print(f"  [OK] {title}")
+            return path
+
+        def fmt_money(x, _=None):
+            if x >= 1_000_000: return f"${x/1_000_000:.1f}M"
+            if x >= 1_000:     return f"${x/1_000:.0f}K"
+            return f"${x:.0f}"
 
         # ── 1. Product Revenue Bar ────────────────────────────────────────────
         prod_data = analytics.get("product", {}).get("top_10")
         if prod_data and product_col and revenue_col:
             pdf = pd.DataFrame(prod_data).sort_values("total_revenue")
-            fig = px.bar(
-                pdf, y=product_col, x="total_revenue",
-                orientation="h", color="total_revenue",
-                color_continuous_scale=["#DBEAFE", "#2563EB"],
-                text=pdf["revenue_share_pct"].apply(lambda v: f"{v}%"),
-                title="Revenue by Product — Top 10",
-            )
-            fig.update_traces(textposition="outside")
-            fig.update_coloraxes(showscale=False)
-            save(fig, "product_revenue", "Revenue by Product",
+            fig, ax = plt.subplots(figsize=(12, max(5, len(pdf)*0.6)))
+            bars = ax.barh(pdf[product_col], pdf["total_revenue"],
+                           color=COLORS[0], alpha=0.85, height=0.6)
+            for bar, pct in zip(bars, pdf["revenue_share_pct"]):
+                ax.text(bar.get_width() + bar.get_width()*0.01,
+                        bar.get_y() + bar.get_height()/2,
+                        f"  {pct}%", va="center", fontsize=10, color="#374151")
+            ax.xaxis.set_major_formatter(plt.FuncFormatter(fmt_money))
+            ax.set_xlabel("Total Revenue")
+            ax.set_title("Revenue by Product — Top 10")
+            plt.tight_layout()
+            save("product_revenue","Revenue by Product",
                  "Top 10 products by total revenue with share %")
 
         # ── 2. Monthly Trend + MoM Growth ─────────────────────────────────────
         monthly_dict = analytics.get("time_series", {}).get("monthly")
         if monthly_dict:
-            mdf = pd.DataFrame(
-                monthly_dict.items(), columns=["month", "revenue"]
-            ).sort_values("month")
-            mom = analytics.get("time_series", {}).get("mom_growth_pct", {})
-            fig = make_subplots(specs=[[{"secondary_y": True}]])
-            fig.add_trace(go.Scatter(
-                x=mdf["month"], y=mdf["revenue"],
-                mode="lines+markers", name="Revenue",
-                line=dict(color="#2563EB", width=2.5),
-                marker=dict(size=7),
-            ), secondary_y=False)
+            mdf = pd.DataFrame(monthly_dict.items(),
+                               columns=["month","revenue"]).sort_values("month")
+            mom = analytics.get("time_series",{}).get("mom_growth_pct",{})
+            fig, ax1 = plt.subplots(figsize=(13, 6))
+            ax1.plot(range(len(mdf)), mdf["revenue"], "o-",
+                     color=COLORS[0], linewidth=2.5, markersize=7, label="Revenue")
+            ax1.fill_between(range(len(mdf)), mdf["revenue"],
+                             alpha=0.08, color=COLORS[0])
+            ax1.set_xticks(range(len(mdf)))
+            ax1.set_xticklabels(mdf["month"], rotation=45, ha="right", fontsize=9)
+            ax1.yaxis.set_major_formatter(plt.FuncFormatter(fmt_money))
+            ax1.set_ylabel("Revenue ($)")
+            ax1.set_title("Monthly Revenue Trend + MoM Growth")
             if mom:
-                mom_df = pd.DataFrame(
-                    mom.items(), columns=["month", "growth"]
-                ).sort_values("month")
-                bar_colors = [
-                    "#059669" if v >= 0 else "#DC2626" for v in mom_df["growth"]
-                ]
-                fig.add_trace(go.Bar(
-                    x=mom_df["month"], y=mom_df["growth"],
-                    name="MoM Growth %",
-                    marker_color=bar_colors, opacity=0.35,
-                ), secondary_y=True)
-            fig.update_layout(title="Monthly Revenue Trend + MoM Growth")
-            fig.update_yaxes(
-                title_text="Revenue ($)", secondary_y=False, gridcolor=GRID
-            )
-            fig.update_yaxes(title_text="MoM Growth (%)", secondary_y=True)
-            save(fig, "monthly_trend", "Monthly Revenue Trend",
+                ax2 = ax1.twinx()
+                mom_df = pd.DataFrame(mom.items(),
+                                      columns=["month","growth"]).sort_values("month")
+                idxs = [list(mdf["month"]).index(m)
+                        for m in mom_df["month"] if m in list(mdf["month"])]
+                bar_colors = ["#059669" if v >= 0 else "#DC2626"
+                              for v in mom_df["growth"]]
+                ax2.bar(idxs, mom_df["growth"].values,
+                        color=bar_colors, alpha=0.3, width=0.5, label="MoM %")
+                ax2.set_ylabel("MoM Growth (%)", color="#64748b")
+                ax2.axhline(0, color="#94a3b8", linewidth=0.8, linestyle="--")
+            fig.legend(loc="upper left", bbox_to_anchor=(0.05, 0.95))
+            plt.tight_layout()
+            save("monthly_trend","Monthly Revenue Trend",
                  "Revenue over time with MoM growth overlay")
 
-        # ── 3. Region Performance Bar ─────────────────────────────────────────
-        region_data = analytics.get("region", {}).get("breakdown")
+        # ── 3. Region Bar ─────────────────────────────────────────────────────
+        region_data = analytics.get("region",{}).get("breakdown")
         if region_data and region_col:
-            rdf = pd.DataFrame(region_data).sort_values(
-                "total_revenue", ascending=False
-            )
-            fig = px.bar(
-                rdf, x=region_col, y="total_revenue",
-                color="total_revenue",
-                color_continuous_scale=["#D1FAE5", "#059669"],
-                text=rdf["revenue_share_pct"].apply(lambda v: f"{v}%"),
-                title="Revenue by Region",
-            )
-            fig.update_traces(textposition="outside")
-            fig.update_coloraxes(showscale=False)
-            fig.update_yaxes(gridcolor=GRID)
-            save(fig, "region_revenue", "Revenue by Region",
+            rdf = pd.DataFrame(region_data).sort_values("total_revenue",ascending=False)
+            fig, ax = plt.subplots(figsize=(10, 6))
+            bar_colors = [COLORS[i % len(COLORS)] for i in range(len(rdf))]
+            bars = ax.bar(rdf[region_col], rdf["total_revenue"],
+                          color=bar_colors, alpha=0.85, width=0.6)
+            for bar, pct in zip(bars, rdf["revenue_share_pct"]):
+                ax.text(bar.get_x() + bar.get_width()/2,
+                        bar.get_height() * 1.02, f"{pct}%",
+                        ha="center", fontsize=10, fontweight="bold")
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(fmt_money))
+            ax.set_ylabel("Total Revenue")
+            ax.set_title("Revenue by Region")
+            plt.tight_layout()
+            save("region_revenue","Revenue by Region",
                  "Regional revenue performance with share %")
 
         # ── 4. Quarterly Bar ──────────────────────────────────────────────────
-        quarterly_dict = analytics.get("time_series", {}).get("quarterly")
+        quarterly_dict = analytics.get("time_series",{}).get("quarterly")
         if quarterly_dict and len(quarterly_dict) >= 2:
-            qdf = pd.DataFrame(
-                quarterly_dict.items(), columns=["quarter", "revenue"]
-            ).sort_values("quarter")
-            fig = px.bar(
-                qdf, x="quarter", y="revenue",
-                color_discrete_sequence=["#7C3AED"],
-                title="Quarterly Revenue",
-                text=qdf["revenue"].apply(lambda v: f"${v:,.0f}"),
-            )
-            fig.update_traces(textposition="outside")
-            fig.update_yaxes(gridcolor=GRID)
-            save(fig, "quarterly", "Quarterly Revenue",
-                 "Revenue aggregated by quarter")
+            qdf = pd.DataFrame(quarterly_dict.items(),
+                               columns=["quarter","revenue"]).sort_values("quarter")
+            fig, ax = plt.subplots(figsize=(10, 6))
+            bars = ax.bar(qdf["quarter"], qdf["revenue"],
+                          color=COLORS[1], alpha=0.85, width=0.5)
+            for bar, val in zip(bars, qdf["revenue"]):
+                ax.text(bar.get_x() + bar.get_width()/2,
+                        bar.get_height() * 1.02, fmt_money(val),
+                        ha="center", fontsize=11, fontweight="bold")
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(fmt_money))
+            ax.set_ylabel("Revenue")
+            ax.set_title("Quarterly Revenue")
+            plt.tight_layout()
+            save("quarterly","Quarterly Revenue","Revenue aggregated by quarter")
 
         # ── 5. Revenue Share Donut ────────────────────────────────────────────
         if prod_data and product_col:
-            pdf  = pd.DataFrame(prod_data)
-            top8 = pdf.head(8)
-            fig  = go.Figure(go.Pie(
-                labels=top8[product_col], values=top8["total_revenue"],
-                hole=0.45, marker_colors=PALETTE[:len(top8)],
-                textinfo="label+percent",
-            ))
-            fig.update_layout(title="Revenue Share by Product (Top 8)")
-            save(fig, "revenue_share_donut", "Revenue Share Donut",
+            top8 = pd.DataFrame(prod_data).head(8)
+            fig, ax = plt.subplots(figsize=(10, 8))
+            wedges, texts, autotexts = ax.pie(
+                top8["total_revenue"],
+                labels=top8[product_col],
+                autopct="%1.1f%%",
+                colors=COLORS[:len(top8)],
+                pctdistance=0.78,
+                wedgeprops=dict(width=0.55, edgecolor="white", linewidth=2),
+                startangle=90,
+            )
+            for at in autotexts:
+                at.set_fontsize(9)
+                at.set_color("white")
+                at.set_fontweight("bold")
+            ax.set_title("Revenue Share by Product (Top 8)", pad=20)
+            plt.tight_layout()
+            save("revenue_share_donut","Revenue Share Donut",
                  "Revenue share by product (top 8)")
 
         # ── 6. Top Customer Bar ───────────────────────────────────────────────
-        cust_data = analytics.get("customer", {}).get("top_10")
+        cust_data = analytics.get("customer",{}).get("top_10")
         if cust_data and customer_col:
             cdf = pd.DataFrame(cust_data).sort_values("total_revenue")
-            fig = px.bar(
-                cdf, y=customer_col, x="total_revenue", orientation="h",
-                color="total_revenue",
-                color_continuous_scale=["#FEF3C7", "#D97706"],
-                title="Top 10 Customers by Revenue",
-                text=cdf["revenue_share_pct"].apply(lambda v: f"{v}%"),
-            )
-            fig.update_traces(textposition="outside")
-            fig.update_coloraxes(showscale=False)
-            save(fig, "top_customers", "Top 10 Customers",
+            fig, ax = plt.subplots(figsize=(12, max(5, len(cdf)*0.6)))
+            bars = ax.barh(cdf[customer_col], cdf["total_revenue"],
+                           color=COLORS[3], alpha=0.85, height=0.6)
+            for bar, pct in zip(bars, cdf["revenue_share_pct"]):
+                ax.text(bar.get_width() + bar.get_width()*0.01,
+                        bar.get_y() + bar.get_height()/2,
+                        f"  {pct}%", va="center", fontsize=10)
+            ax.xaxis.set_major_formatter(plt.FuncFormatter(fmt_money))
+            ax.set_xlabel("Total Revenue")
+            ax.set_title("Top 10 Customers by Revenue")
+            plt.tight_layout()
+            save("top_customers","Top 10 Customers",
                  "Highest revenue-generating customers")
 
         # ── 7. Correlation Heatmap ────────────────────────────────────────────
         corr = analytics.get("correlation_matrix")
         if corr and len(corr) >= 2:
             corr_df = pd.DataFrame(corr)
-            fig = go.Figure(go.Heatmap(
-                z=corr_df.values,
-                x=list(corr_df.columns),
-                y=list(corr_df.index),
-                colorscale="RdBu", zmid=0, zmin=-1, zmax=1,
-                text=corr_df.round(2).values,
-                texttemplate="%{text}",
-            ))
-            fig.update_layout(title="Numeric Column Correlation Heatmap")
-            save(fig, "correlation_heatmap", "Correlation Heatmap",
+            fig, ax = plt.subplots(figsize=(10, 8))
+            im = ax.imshow(corr_df.values, cmap="RdBu_r", vmin=-1, vmax=1,
+                           aspect="auto")
+            ax.set_xticks(range(len(corr_df.columns)))
+            ax.set_yticks(range(len(corr_df.index)))
+            ax.set_xticklabels(corr_df.columns, rotation=45, ha="right")
+            ax.set_yticklabels(corr_df.index)
+            for i in range(len(corr_df.index)):
+                for j in range(len(corr_df.columns)):
+                    v = corr_df.values[i, j]
+                    ax.text(j, i, f"{v:.2f}", ha="center", va="center",
+                            fontsize=10, color="white" if abs(v) > 0.5 else "#1e293b",
+                            fontweight="bold")
+            plt.colorbar(im, ax=ax, shrink=0.8)
+            ax.set_title("Numeric Column Correlation Heatmap")
+            plt.tight_layout()
+            save("correlation_heatmap","Correlation Heatmap",
                  "Pairwise correlations between numeric columns")
 
-        # ── 8. KPI Summary Card ───────────────────────────────────────────────
+        # ── 8. KPI Dashboard ─────────────────────────────────────────────────
         summary = analytics.get("summary", {})
         rev     = analytics.get("revenue", {})
         kpis = [
-            ("Total Revenue",   f"${rev.get('total', 0):,.0f}"   if rev.get("total")   else "N/A"),
-            ("Avg Transaction", f"${rev.get('average', 0):,.0f}" if rev.get("average") else "N/A"),
-            ("Top Product",     str(summary.get("top_product", "N/A"))),
-            ("Best Region",     str(summary.get("best_region",  "N/A"))),
+            ("Total Revenue",   fmt_money(rev.get("total",0)) if rev.get("total") else "N/A", COLORS[0]),
+            ("Avg Transaction", fmt_money(rev.get("average",0)) if rev.get("average") else "N/A", COLORS[1]),
+            ("Top Product",     str(summary.get("top_product","N/A")), COLORS[2]),
+            ("Best Region",     str(summary.get("best_region","N/A")), COLORS[3]),
             ("MoM Growth",
-             f"{summary.get('latest_mom_growth_pct', 0):.1f}%"
-             if summary.get("latest_mom_growth_pct") is not None else "N/A"),
-            ("Best Month",      str(summary.get("best_month", "N/A"))),
+             f"{summary.get('latest_mom_growth_pct',0):.1f}%"
+             if summary.get("latest_mom_growth_pct") is not None else "N/A",
+             COLORS[4] if (summary.get("latest_mom_growth_pct") or 0) >= 0 else COLORS[4]),
+            ("Best Month",      str(summary.get("best_month","N/A")), COLORS[5]),
         ]
-        fig = go.Figure()
-        cols_per_row = 3
-        for i, (label, value) in enumerate(kpis):
-            r, c = divmod(i, cols_per_row)
-            fig.add_annotation(
-                x=(c + 0.5) / cols_per_row,
-                y=1 - (r * 0.5) - 0.1,
-                text=(
-                    f"<b style='font-size:22px'>{value}</b><br>"
-                    f"<span style='font-size:13px;color:#6B7280'>{label}</span>"
-                ),
-                showarrow=False, xref="paper", yref="paper", align="center",
-            )
-        fig.update_layout(
-            title="KPI Dashboard", height=300,
-            paper_bgcolor="white", plot_bgcolor="white",
-            xaxis=dict(visible=False), yaxis=dict(visible=False),
-        )
-        kpi_path = f"{CHARTS_DIR}/{base}_kpi_dashboard.png"
-        try:
-            fig.write_image(kpi_path, width=1200, height=300, scale=1.5)
-            chart_paths.append(kpi_path)
-            chart_meta.append({
-                "path": kpi_path,
-                "title": "KPI Dashboard",
-                "description": "Key performance indicators at a glance",
-                "format": "png",
-            })
-            print("  [OK] KPI Dashboard")
-        except Exception as kpi_err:
-            print(f"  [WARN] KPI PNG failed: {kpi_err} — saving HTML")
-            kpi_html = f"{CHARTS_DIR}/{base}_kpi_dashboard.html"
-            fig.write_html(kpi_html)
-            chart_paths.append(kpi_html)
-            chart_meta.append({
-                "path": kpi_html,
-                "title": "KPI Dashboard",
-                "description": "Key performance indicators at a glance",
-                "format": "html",
-            })
+        fig = plt.figure(figsize=(14, 4), facecolor="white")
+        fig.suptitle("KPI Dashboard", fontsize=16, fontweight="bold",
+                     color="#1e293b", y=1.02)
+        for i, (label, value, color) in enumerate(kpis):
+            ax = fig.add_subplot(2, 3, i+1)
+            ax.set_facecolor("#f8fafc")
+            for spine in ax.spines.values():
+                spine.set_edgecolor("#e2e8f0")
+                spine.set_linewidth(1.5)
+            ax.text(0.5, 0.62, value, transform=ax.transAxes,
+                    fontsize=18, fontweight="bold", ha="center",
+                    va="center", color=color)
+            ax.text(0.5, 0.22, label, transform=ax.transAxes,
+                    fontsize=9, ha="center", va="center",
+                    color="#64748b", style="italic")
+            ax.set_xticks([]); ax.set_yticks([])
+        plt.tight_layout()
+        save("kpi_dashboard","KPI Dashboard",
+             "Key performance indicators at a glance")
 
         # ── 9. Revenue vs Quantity Scatter ────────────────────────────────────
         if revenue_col and qty_col and product_col:
             sdf = df.groupby(product_col)[[revenue_col, qty_col]].sum().reset_index()
-            fig = px.scatter(
-                sdf, x=qty_col, y=revenue_col,
-                size=revenue_col, color=product_col,
-                hover_name=product_col,
-                color_discrete_sequence=PALETTE,
-                title="Revenue vs Quantity Sold (by Product)",
-            )
-            fig.update_yaxes(gridcolor=GRID)
-            save(fig, "revenue_vs_qty", "Revenue vs Quantity",
+            fig, ax = plt.subplots(figsize=(12, 7))
+            for i, (_, row) in enumerate(sdf.iterrows()):
+                size = (row[revenue_col] / sdf[revenue_col].max()) * 2000 + 100
+                ax.scatter(row[qty_col], row[revenue_col],
+                           s=size, color=COLORS[i % len(COLORS)],
+                           alpha=0.75, edgecolors="white", linewidth=1.5,
+                           label=str(row[product_col]))
+                ax.annotate(str(row[product_col]),
+                            (row[qty_col], row[revenue_col]),
+                            textcoords="offset points", xytext=(0, 10),
+                            ha="center", fontsize=9, color="#374151")
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(fmt_money))
+            ax.set_xlabel("Quantity Sold")
+            ax.set_ylabel("Revenue ($)")
+            ax.set_title("Revenue vs Quantity Sold (by Product)")
+            ax.legend(loc="upper left", fontsize=9)
+            plt.tight_layout()
+            save("revenue_vs_qty","Revenue vs Quantity",
                  "Bubble chart — size = revenue, position = qty vs revenue")
 
         # ── 10. Anomaly Chart ─────────────────────────────────────────────────
-        anomalies = analytics.get("time_series", {}).get("anomaly_months", {})
-        if monthly_dict and anomalies:
-            mdf = pd.DataFrame(
-                monthly_dict.items(), columns=["month", "revenue"]
-            ).sort_values("month")
-            adf = pd.DataFrame(
-                anomalies.items(), columns=["month", "revenue"]
-            )
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=mdf["month"], y=mdf["revenue"],
-                mode="lines+markers", name="Revenue",
-                line=dict(color="#2563EB", width=2),
-            ))
-            fig.add_trace(go.Scatter(
-                x=adf["month"], y=adf["revenue"],
-                mode="markers", name="Anomaly",
-                marker=dict(color="#DC2626", size=14, symbol="x"),
-            ))
-            fig.update_layout(title="Monthly Revenue with Anomaly Detection")
-            fig.update_yaxes(gridcolor=GRID)
-            save(fig, "anomaly_chart", "Anomaly Detection",
+        anomalies = analytics.get("time_series",{}).get("anomaly_months",{})
+        if monthly_dict:
+            mdf = pd.DataFrame(monthly_dict.items(),
+                               columns=["month","revenue"]).sort_values("month")
+            fig, ax = plt.subplots(figsize=(13, 6))
+            ax.plot(range(len(mdf)), mdf["revenue"], "o-",
+                    color=COLORS[0], linewidth=2.5, markersize=7, label="Revenue")
+            ax.fill_between(range(len(mdf)), mdf["revenue"],
+                            alpha=0.06, color=COLORS[0])
+            if anomalies:
+                for month, rev in anomalies.items():
+                    if month in list(mdf["month"]):
+                        idx = list(mdf["month"]).index(month)
+                        ax.scatter(idx, rev, color=COLORS[4], s=200,
+                                   marker="X", zorder=5, linewidth=2)
+                        ax.annotate(f"Anomaly\n{fmt_money(rev)}",
+                                    (idx, rev),
+                                    textcoords="offset points",
+                                    xytext=(0, 15), ha="center",
+                                    fontsize=9, color=COLORS[4],
+                                    fontweight="bold")
+            ax.set_xticks(range(len(mdf)))
+            ax.set_xticklabels(mdf["month"], rotation=45, ha="right", fontsize=9)
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(fmt_money))
+            ax.set_ylabel("Revenue ($)")
+            ax.set_title("Monthly Revenue with Anomaly Detection")
+            from matplotlib.lines import Line2D
+            legend_elements = [
+                Line2D([0],[0], color=COLORS[0], linewidth=2, label="Revenue"),
+                Line2D([0],[0], marker="X", color=COLORS[4], linewidth=0,
+                       markersize=10, label="Anomaly"),
+            ]
+            ax.legend(handles=legend_elements)
+            plt.tight_layout()
+            save("anomaly_chart","Anomaly Detection",
                  "Months with revenue > 2 std deviations flagged")
 
         state["chart_paths"]    = chart_paths
         state["chart_metadata"] = chart_meta
         state["processing_time"]["visualizer"] = round(time.time() - t0, 2)
-        print(f"  Total: {len(chart_paths)} charts in {state['processing_time']['visualizer']}s")
+        print(f"  Total: {len(chart_paths)} charts in "
+              f"{state['processing_time']['visualizer']}s")
 
     except Exception as e:
         import traceback
