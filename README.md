@@ -160,6 +160,109 @@ NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/
 
 ---
 
+# 📸 Screenshots
+
+## Landing Page
+
+The platform provides a clean AI-powered Business Intelligence interface where users can upload datasets and launch a complete analytics pipeline.
+
+![Landing Page](screenshots/landing-page.png)
+
+---
+
+## Executive Dashboard
+
+After analysis completes, the platform generates KPI cards, growth metrics, forecasts, and business insights automatically.
+
+![Executive Dashboard](screenshots/dashboard-overview.png)
+
+---
+
+## Product Analytics
+
+Identify top-performing products, revenue contribution, transaction volume, and Pareto distribution.
+
+![Product Analytics](screenshots/product-analysis.png)
+
+---
+
+## Regional Performance Analysis
+
+Compare performance across regions and identify best and worst performing markets.
+
+![Regional Analytics](screenshots/region-analysis.png)
+
+---
+
+## Customer Intelligence
+
+Discover high-value customers, repeat buyers, customer concentration, and revenue distribution.
+
+![Customer Analytics](screenshots/customer-analysis.png)
+
+---
+
+## Time-Series Analysis
+
+Track monthly trends, growth rates, anomalies, and seasonality.
+
+![Time Series Analytics](screenshots/time-series-analysis.png)
+
+---
+
+## Visualization Engine
+
+The platform automatically generates 10 business intelligence charts including revenue trends, customer insights, heatmaps, anomaly detection, and forecasting visualizations.
+
+![Charts](screenshots/charts-grid.png)
+
+---
+
+## Forecasting Module
+
+Four forecasting models are evaluated automatically and the best model is selected using MAPE.
+
+Models:
+- Prophet
+- XGBoost
+- ARIMA
+- Linear Regression
+
+![Forecasting](screenshots/forecast-analysis.png)
+
+---
+
+## Data Quality Assessment
+
+The Data Cleaning Agent performs automated quality checks and generates a detailed quality report.
+
+![Data Quality](screenshots/data-quality.png)
+
+---
+
+## AI Executive Report
+
+The Groq-powered Executive Report Agent generates an executive-level business report with actionable recommendations and risk analysis.
+
+![Executive Report](screenshots/executive-report.png)
+
+---
+
+## PDF Export
+
+Generate a downloadable multi-page PDF report suitable for managers, stakeholders, and executives.
+
+✔ KPI Summary
+
+✔ Forecast Results
+
+✔ Data Quality Assessment
+
+✔ Strategic Recommendations
+
+✔ Risk Analysis
+
+
 ## 🔬 Agent Performance (on test_sales.csv)
 
 ```
