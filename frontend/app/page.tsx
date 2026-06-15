@@ -7,6 +7,8 @@ import KPICards from "@/components/KPICards";
 import ChartGrid from "@/components/ChartGrid";
 import ReportPanel from "@/components/ReportPanel";
 import AnalyticsTables from "@/components/AnalyticsTables";
+import Footer from "@/components/Footer";
+import HowItWorks from "@/components/HowItWorks";
 
 export default function Home() {
   const { jobId, status, progress, agent, result, error, filename, run, reset } = usePipeline();
@@ -140,6 +142,7 @@ export default function Home() {
             <div style={{ maxWidth: 640, margin: "0 auto" }}>
               <FileUpload onFile={handleFile} />
             </div>
+            <HowItWorks />
           </div>
         )}
 
@@ -252,6 +255,7 @@ export default function Home() {
           </div>
         )}
       </div>
+      <Footer />
     </div>
   );
 }
