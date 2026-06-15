@@ -128,9 +128,10 @@ def data_cleaning_agent(state: AgentState) -> AgentState:
         # 8. Near-duplicate detection (hash on numeric fingerprint)
         num_cols = df.select_dtypes(include="number").columns.tolist()
         if len(num_cols) >= 2:
-            hashes = df[num_cols].round(2).astype(str).agg("|".join, axis=1).apply(
-                lambda x: hashlib.md5(x.encode()).hexdigest()
-            )
+            rounded = df[num_cols].round(2)
+            hashes = rounded.apply(
+                lambda row: "|".join(f"{v}" for v in row.tolist()), axis=1
+            ).apply(lambda x: hashlib.md5(x.encode()).hexdigest())
             near = int(hashes.duplicated().sum())
             if near:
                 state["warnings"].append(
